@@ -10,6 +10,8 @@ import uuid
 import asyncio
 
 is_pypy = platform.python_implementation() == "PyPy"
+
+
 @ffi.callback("void(uws_res_t*, void*)")
 def asgi_on_abort_handler(res, user_data):
     ctx = ffi.from_handle(user_data)
@@ -19,6 +21,7 @@ def asgi_on_abort_handler(res, user_data):
     if ctx.abort_future is not None:
         ctx.abort_future.set_result(True)
         ctx.abort_future = None
+
 
 async def task_wrapper(task):
     try:
@@ -32,6 +35,7 @@ async def task_wrapper(task):
 
 
 EMPTY_RESPONSE = {"type": "http.request", "body": b"", "more_body": False}
+
 
 @ffi.callback("void(uws_websocket_t*, const char*, size_t, uws_opcode_t, void*)")
 def ws_message(ws, message, length, opcode, user_data):
@@ -103,7 +107,6 @@ def ws_upgrade(ssl, response, info, socket_context, user_data):
             None,
         ),
         "scheme": app.SERVER_WS_SCHEME,
-        "method": ffi.unpack(info.method, info.method_size).decode("utf8"),
         "root_path": "",
         "path": url.decode("utf8"),
         "raw_path": url,
@@ -270,6 +273,7 @@ class ASGIDataQueue:
         self.is_end = False
         self.next_data_future = loop.create_future()
 
+
 class ASGIContext:
     def __init__(self, ssl, response, loop):
         self._ptr = ffi.new_handle(self)
@@ -286,6 +290,7 @@ class ASGIContext:
             if self.abort_future is None:
                 self.abort_future = self.loop.create_future()
             await self.abort_future
+
 
 class ASGIWebSocket:
     def __init__(self, loop):
@@ -373,20 +378,20 @@ def write_header(ssl, res, key, value):
     if isinstance(key, bytes):
         # this is faster than using .lower()
         if (
-            key == b"content-length"
-            or key == b"Content-Length"
-            or key == b"Transfer-Encoding"
-            or key == b"transfer-encoding"
+                key == b"content-length"
+                or key == b"Content-Length"
+                or key == b"Transfer-Encoding"
+                or key == b"transfer-encoding"
         ):
             return  # auto
         key_data = key
     elif isinstance(key, str):
         # this is faster than using .lower()
         if (
-            key == "content-length"
-            or key == "Content-Length"
-            or key == "Transfer-Encoding"
-            or key == "transfer-encoding"
+                key == "content-length"
+                or key == "Content-Length"
+                or key == "Transfer-Encoding"
+                or key == "transfer-encoding"
         ):
             return  # auto
         key_data = key.encode("utf-8")
@@ -444,7 +449,7 @@ def uws_asgi_corked_403_handler(res, user_data):
 def asgi(ssl, response, info, user_data):
     app = ffi.from_handle(user_data)
     app.server.loop.is_idle = False
-            
+
     headers = []
     next_header = info.header_list
     while next_header != ffi.NULL:
@@ -463,7 +468,8 @@ def asgi(ssl, response, info, user_data):
         "http_version": "1.1",
         "server": (app.SERVER_HOST, app.SERVER_PORT),
         "client": (
-            None if info.remote_address == ffi.NULL else ffi.unpack(info.remote_address, info.remote_address_size).decode("utf8"),
+            None if info.remote_address == ffi.NULL else ffi.unpack(info.remote_address,
+                                                                    info.remote_address_size).decode("utf8"),
             None,
         ),
         "scheme": app.SERVER_SCHEME,
@@ -473,7 +479,7 @@ def asgi(ssl, response, info, user_data):
         "raw_path": url,
         "query_string": ffi.unpack(info.query_string, info.query_string_size),
         "headers": headers,
-    
+
     }
     loop = app.server.loop
     ctx = ASGIContext(ssl, response, loop)
@@ -481,7 +487,7 @@ def asgi(ssl, response, info, user_data):
         data_queue = ASGIDataQueue(loop)
         lib.uws_res_on_data(ssl, response, asgi_on_data_handler, data_queue._ptr)
         ctx.data_queue = data_queue
-    
+
     lib.uws_res_on_aborted(ssl, response, asgi_on_abort_handler, ctx._ptr)
 
     async def receive():
@@ -514,7 +520,7 @@ def asgi(ssl, response, info, user_data):
     async def send(options):
         if ctx.aborted:
             return False
-        
+
         ctx.loop.is_idle = False
         type = options["type"]
         ssl = ctx.ssl
@@ -547,7 +553,6 @@ def asgi(ssl, response, info, user_data):
                 elif isinstance(message, str):
                     data = message.encode("utf-8")
                     lib.socketify_res_cork_end(ssl, response, data, len(data), 0)
-                
 
                 if ctx.abort_future is not None:
                     ctx.aborted = True
@@ -562,13 +567,13 @@ def asgi(ssl, response, info, user_data):
 
 class _ASGI:
     def __init__(
-        self,
-        app,
-        options=None,
-        websocket=True,
-        websocket_options=None,
-        task_factory_max_items=100_000,
-        lifespan=True,
+            self,
+            app,
+            options=None,
+            websocket=True,
+            websocket_options=None,
+            task_factory_max_items=100_000,
+            lifespan=True,
     ):
         self.server = App(options, task_factory_max_items=0)
         self.SERVER_PORT = None
@@ -599,11 +604,11 @@ class _ASGI:
 
         else:
 
-                def run_task(task):
-                    future = create_task(loop, task_wrapper(task))
-                    future._log_destroy_pending = False
+            def run_task(task):
+                future = create_task(loop, task_wrapper(task))
+                future._log_destroy_pending = False
 
-                self._run_task = run_task
+            self._run_task = run_task
 
         self.app = app
         self.ws_compression = False
@@ -735,7 +740,8 @@ class _ASGI:
                         asgi_app.server.listen(port_or_options, handler)
                 finally:
                     return None
-        self.server.loop.is_idle = False      
+
+        self.server.loop.is_idle = False
         # start lifespan
         self.server.loop.ensure_future(task_wrapper(self.app(scope, receive, send)))
         self.server.run()
@@ -785,13 +791,13 @@ class _ASGI:
 # "Public" ASGI interface to allow easy forks/workers
 class ASGI:
     def __init__(
-        self,
-        app,
-        options=None,
-        websocket=True,
-        websocket_options=None,
-        task_factory_max_items=100_000,  # default = 100k = +20mib in memory
-        lifespan=True,
+            self,
+            app,
+            options=None,
+            websocket=True,
+            websocket_options=None,
+            task_factory_max_items=100_000,  # default = 100k = +20mib in memory
+            lifespan=True,
     ):
         self.app = app
         self.options = options
@@ -811,7 +817,7 @@ class ASGI:
         # always wait a sec so forks can start properly if close is called too fast
         import time
         time.sleep(1)
-        
+
         if self.server is not None:
             self.server.close()
         if self.pid_list is not None:
@@ -833,7 +839,7 @@ class ASGI:
                 (port_or_options, handler) = self.listen_options
                 server.listen(port_or_options, handler)
             self.server = server
-            server.run()     
+            server.run()
 
         pid_list = []
         start = 1 if block else 0
@@ -845,7 +851,7 @@ class ASGI:
                 run_task()
                 break
             pid_list.append(pid)
-        
+
         self.pid_list = pid_list
 
         if block:
